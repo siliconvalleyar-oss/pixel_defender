@@ -114,7 +114,7 @@ class _GameSceneState extends State<GameScene> {
               options: _upgradeOptions,
               onSelected: (option) {
                 _game.applyUpgradeChoice(option);
-                setState(() => _runState = GameRunState.running);
+                setState(() => _runState = _game.runState);
               },
             ),
 

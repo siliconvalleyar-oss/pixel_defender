@@ -133,11 +133,19 @@ class PixelDefenderGame extends FlameGame with KeyboardEvents {
 
     super.update(dt);
 
-    waveSystem.update(dt);
-    collisionSystem.update(dt);
-    CameraShake.update(camera, dt);
+    try {
+      waveSystem.update(dt);
+    } catch (_) {}
+    try {
+      collisionSystem.update(dt);
+    } catch (_) {}
+    try {
+      CameraShake.update(camera, dt);
+    } catch (_) {}
 
-    onStateChanged?.call();
+    try {
+      onStateChanged?.call();
+    } catch (_) {}
   }
 
   @override
