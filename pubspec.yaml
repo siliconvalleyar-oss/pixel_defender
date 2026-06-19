@@ -1,0 +1,50 @@
+name: pixel_defender
+description: "Pixel Defender - Juego arcade 2D estilo survivors, construido con Flutter y Flame."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Motor de juego
+  flame: ^1.18.0
+  flame_audio: ^2.10.5
+
+  # Persistencia
+  shared_preferences: ^2.3.2
+
+  # Gestión de estado
+  provider: ^6.1.2
+
+  # Utilidades
+  collection: ^1.18.0
+  uuid: ^4.4.2
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/player/
+    - assets/images/enemy/
+    - assets/images/weapons/
+    - assets/images/backgrounds/
+    - assets/images/ui/
+    - assets/audio/music/
+    - assets/audio/sfx/
+
+  # Para añadir fuentes personalizadas, descomenta y ajusta:
+  # fonts:
+  #   - family: PixelFont
+  #     fonts:
+  #       - asset: fonts/PixelFont-Regular.ttf
