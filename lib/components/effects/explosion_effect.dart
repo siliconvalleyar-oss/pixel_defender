@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 
 /// Texto flotante que muestra el daño infligido a un enemigo y luego
 /// desaparece. Se auto-elimina al terminar su animación.
+///
+/// NOTA: No usa [OpacityEffect] porque [TextComponent] no implementa
+/// [OpacityProvider]; maneja la opacidad manualmente en [update].
 class DamageNumberComponent extends TextComponent {
   DamageNumberComponent({
     required super.position,
@@ -25,20 +28,27 @@ class DamageNumberComponent extends TextComponent {
           ),
         );
 
+  static const double _moveDuration = 0.6;
+  static const double _extraDelay = 0.15;
+  double _elapsed = 0;
+
   @override
   Future<void> onLoad() async {
     add(
       MoveByEffect(
         Vector2(0, -32),
-        EffectController(duration: 0.6, curve: Curves.easeOut),
+        EffectController(duration: _moveDuration, curve: Curves.easeOut),
       ),
     );
-    add(
-      OpacityEffect.fadeOut(
-        EffectController(duration: 0.6, startDelay: 0.15),
-        onComplete: removeFromParent,
-      ),
-    );
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _elapsed += dt;
+    if (_elapsed >= _moveDuration + _extraDelay) {
+      removeFromParent();
+    }
   }
 }
 

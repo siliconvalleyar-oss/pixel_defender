@@ -40,6 +40,7 @@ flutter:
     - assets/images/weapons/
     - assets/images/backgrounds/
     - assets/images/ui/
+    - assets/images/naves/
     - assets/audio/music/
     - assets/audio/sfx/
 

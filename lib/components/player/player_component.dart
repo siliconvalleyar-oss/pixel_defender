@@ -1,3 +1,4 @@
+import 'dart:math' show atan2, min, pi;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
@@ -8,12 +9,6 @@ import 'package:pixel_defender/models/player_data.dart';
 import 'package:pixel_defender/models/weapon_data.dart';
 import 'package:pixel_defender/utils/constants.dart';
 
-/// Componente del jugador controlado por el usuario.
-///
-/// Combina:
-/// - Movimiento dirigido por un vector de entrada (joystick/teclado/gamepad).
-/// - El modelo [PlayerData] (vida, experiencia, nivel, estadísticas).
-/// - La lista de [WeaponComponent] equipados, que disparan automáticamente.
 class PlayerComponent extends PositionComponent
     with CollisionCallbacks, HasGameReference<PixelDefenderGame> {
   PlayerComponent({PlayerData? data})
@@ -27,15 +22,13 @@ class PlayerComponent extends PositionComponent
   final PlayerAnimationController animController = PlayerAnimationController();
   final List<WeaponComponent> weapons = [];
 
-  /// Vector de entrada normalizado (-1..1 en cada eje), seteado externamente
-  /// por el joystick virtual, teclado o gamepad. PixelDefenderGame es quien
-  /// combina todas las fuentes de input y escribe aquí.
   Vector2 inputDirection = Vector2.zero();
 
   double _invulnerabilityTimer = 0;
   bool get isInvulnerable => _invulnerabilityTimer > 0;
 
   late final CircleHitbox _hitbox;
+  late final Sprite _shipSprite;
 
   @override
   Future<void> onLoad() async {
@@ -43,13 +36,14 @@ class PlayerComponent extends PositionComponent
       ..collisionType = CollisionType.passive;
     add(_hitbox);
 
-    // Arma inicial: pistola automática.
+    _shipSprite = await Sprite.load('naves/nave_00.png', images: game.images);
+
     equipWeapon(WeaponType.pistol);
   }
 
   void equipWeapon(WeaponType type) {
     final existing = weapons.where((w) => w.instance.type == type);
-    if (existing.isNotEmpty) return; // ya equipada; usar levelUpWeapon en su lugar
+    if (existing.isNotEmpty) return;
 
     final instance = WeaponInstance(type: type);
     final weapon = WeaponComponent(
@@ -76,7 +70,6 @@ class PlayerComponent extends PositionComponent
     weapon.critMultiplier = data.stats.critMultiplier;
   }
 
-  /// Debe llamarse tras aplicar cualquier mejora que afecte stats de armas.
   void refreshWeaponStats() {
     for (final weapon in weapons) {
       _syncWeaponMultipliers(weapon);
@@ -98,17 +91,15 @@ class PlayerComponent extends PositionComponent
           : inputDirection;
       position += clampedInput * data.stats.speed * dt;
 
-      // Mantiene al jugador dentro de los límites del mundo.
       position.x = position.x.clamp(0, GameConstants.worldWidth);
       position.y = position.y.clamp(0, GameConstants.worldHeight);
+
+      angle = atan2(inputDirection.y, inputDirection.x) + pi / 2;
     }
 
     data.survivalTime += dt;
   }
 
-  /// Aplica daño al jugador, respetando invulnerabilidad temporal tras
-  /// el último golpe (evita que enemigos en contacto continuo hagan daño
-  /// cada frame).
   void takeDamage(double amount) {
     if (isInvulnerable || data.isDead) return;
 
@@ -126,32 +117,28 @@ class PlayerComponent extends PositionComponent
 
   @override
   void render(Canvas canvas) {
-    final bodyColor = animController.isFlashing
-        ? Colors.red
-        : (isInvulnerable ? Colors.blueAccent.withValues(alpha: 0.6) : Colors.lightBlueAccent);
-
     final bobOffset = animController.bobOffset;
-    final rect = Rect.fromLTWH(0, bobOffset, size.x, size.y);
 
-    final paint = Paint()
-      ..color = bodyColor
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(10)),
-      paint,
-    );
+    canvas.save();
+    canvas.translate(0, bobOffset);
 
-    // Indicador de dirección (un pequeño triángulo) para dar feedback visual
-    // de hacia dónde se está moviendo el jugador.
-    if (inputDirection.length2 > GameConstants.joystickDeadZone) {
-      final dir = inputDirection.normalized();
-      final center = Offset(size.x / 2, size.y / 2 + bobOffset);
-      final tip = center + Offset(dir.x, dir.y) * (size.x / 2 + 6);
-      canvas.drawCircle(tip, 3, Paint()..color = Colors.white);
+    final spriteSize = _shipSprite.srcSize;
+    final scale = min(size.x / spriteSize.x, size.y / spriteSize.y);
+    final scaled = spriteSize * scale;
+    final offset = (size - scaled) / 2;
+
+    final paint = Paint();
+    if (animController.isFlashing) {
+      paint.colorFilter = const ColorFilter.mode(Colors.red, BlendMode.srcATop);
+    } else if (isInvulnerable) {
+      paint.colorFilter = const ColorFilter.mode(
+        Colors.blueAccent,
+        BlendMode.srcATop,
+      );
+      paint.color = Colors.white.withValues(alpha: 0.6);
     }
 
-    // Renderiza los orbes del arma "orbiter" si está equipada (posición
-    // relativa al jugador, ya que este componente está en el sistema de
-    // coordenadas del mundo).
+    _shipSprite.render(canvas, position: offset, size: scaled, overridePaint: paint);
+    canvas.restore();
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:math' show atan2, min, pi;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
@@ -6,17 +7,10 @@ import 'package:pixel_defender/game/pixel_defender_game.dart';
 import 'package:pixel_defender/managers/audio_manager.dart';
 import 'package:pixel_defender/models/enemy_data.dart';
 
-// Constantes locales para el hot path de update() (evita imports pesados
-// repetidos por cada enemigo activo).
 const double _kEnemyDespawnRadius = 900;
 const double _kContactCooldown = 0.5;
 const double _kKnockbackForce = 260;
 
-/// Componente visual + lógico de un enemigo individual.
-///
-/// La IA es deliberadamente simple ("persigue al jugador en línea recta"),
-/// como corresponde a un juego de oleadas masivas: con cientos de enemigos
-/// en pantalla, pathfinding complejo sería prohibitivo en rendimiento.
 class EnemyComponent extends PositionComponent
     with CollisionCallbacks, HasGameReference<PixelDefenderGame> {
   EnemyComponent({required this.archetype}) : super(anchor: Anchor.center) {
@@ -37,14 +31,11 @@ class EnemyComponent extends PositionComponent
   double _deathAnimTimer = -1;
   double opacity = 1;
 
-  // Knockback en curso (si lo hay)
   Vector2 _knockbackVelocity = Vector2.zero();
 
   late final CircleHitbox _hitbox;
+  late final Sprite _sprite;
 
-  /// Reinicia este enemigo con nuevos valores escalados por dificultad,
-  /// permitiendo reutilizar la instancia (pooling de enemigos también
-  /// reduce presión de GC durante oleadas largas).
   void initialize({
     required Vector2 position,
     required double healthMultiplier,
@@ -71,6 +62,24 @@ class EnemyComponent extends PositionComponent
     _hitbox = CircleHitbox(radius: size.x / 2)
       ..collisionType = CollisionType.passive;
     add(_hitbox);
+
+    final path = _spritePath;
+    _sprite = await Sprite.load(path, images: game.images);
+  }
+
+  String get _spritePath {
+    switch (archetype.type) {
+      case EnemyType.grunt:
+        return 'naves/enemy_00.png';
+      case EnemyType.runner:
+        return 'naves/enemy_01.png';
+      case EnemyType.tank:
+        return 'naves/enemy_02.png';
+      case EnemyType.ranged:
+        return 'naves/enemy_02.png';
+      case EnemyType.boss:
+        return 'naves/enemy_02.png';
+    }
   }
 
   @override
@@ -85,7 +94,6 @@ class EnemyComponent extends PositionComponent
     _contactDamageCooldown -= dt;
     if (_flashTimer > 0) _flashTimer -= dt;
 
-    // Despawn si quedó demasiado lejos del jugador (mantiene la simulación acotada).
     final distToPlayer = position.distanceTo(game.player.position);
     if (distToPlayer > _kEnemyDespawnRadius) {
       game.enemySpawnSystem.recycle(this);
@@ -94,10 +102,14 @@ class EnemyComponent extends PositionComponent
 
     _applyMovement(dt, distToPlayer);
     _checkContactDamage();
+
+    if (distToPlayer > 1) {
+      final dir = game.player.position - position;
+      angle = atan2(dir.y, dir.x) + pi / 2;
+    }
   }
 
   void _applyMovement(double dt, double distToPlayer) {
-    // Aplica knockback si existe, decayendo con el tiempo.
     if (_knockbackVelocity.length2 > 1) {
       position += _knockbackVelocity * dt;
       _knockbackVelocity *= 0.86;
@@ -105,7 +117,6 @@ class EnemyComponent extends PositionComponent
     }
 
     if (archetype.isRanged && distToPlayer < 220) {
-      // Los enemigos a distancia mantienen el rango en lugar de pegarse al jugador.
       final away = (position - game.player.position).normalized();
       position += away * speed * 0.5 * dt;
       return;
@@ -125,8 +136,6 @@ class EnemyComponent extends PositionComponent
     }
   }
 
-  /// Aplica daño a este enemigo. Devuelve true si el enemigo murió por
-  /// este golpe.
   bool takeDamage(
     double amount, {
     Vector2? knockbackFrom,
@@ -190,17 +199,18 @@ class EnemyComponent extends PositionComponent
 
   @override
   void render(Canvas canvas) {
-    final color = _baseColor();
-    final paint = Paint()
-      ..color = (_flashTimer > 0 ? Colors.white : color).withValues(alpha: opacity)
-      ..style = PaintingStyle.fill;
+    final spriteSize = _sprite.srcSize;
+    final scale = min(size.x / spriteSize.x, size.y / spriteSize.y);
+    final scaled = spriteSize * scale;
+    final offset = (size - scaled) / 2;
 
-    final rect = Rect.fromLTWH(0, 0, size.x, size.y);
-    final radius = Radius.circular(size.x * 0.25);
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), paint);
+    final paint = Paint();
+    if (_flashTimer > 0) {
+      paint.colorFilter = const ColorFilter.mode(Colors.white, BlendMode.srcATop);
+    }
 
-    // Barra de vida sobre el enemigo (solo si ha recibido daño y no es boss,
-    // los bosses tienen su propia barra en el HUD).
+    _sprite.render(canvas, position: offset, size: scaled, overridePaint: paint);
+
     if (currentHealth < maxHealth && !archetype.isBoss && isAlive) {
       final healthPct = (currentHealth / maxHealth).clamp(0.0, 1.0);
       final barWidth = size.x;

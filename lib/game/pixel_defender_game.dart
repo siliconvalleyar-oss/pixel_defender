@@ -22,6 +22,8 @@ import 'package:pixel_defender/systems/upgrade_system.dart';
 import 'package:pixel_defender/systems/wave_system.dart';
 import 'package:pixel_defender/utils/constants.dart';
 
+int _debugFrameCount = 0;
+
 /// Estado de alto nivel de la partida en curso, observado por la UI (HUD,
 /// pantalla de mejoras, game over) a través de callbacks expuestos en
 /// [PixelDefenderGame].
@@ -36,12 +38,29 @@ enum GameRunState { running, paused, leveling, gameOver }
 /// de acceder directamente a los componentes internos.
 class PixelDefenderGame extends FlameGame with KeyboardEvents {
   PixelDefenderGame({PlayerData? initialPlayerData})
-      : _initialPlayerData = initialPlayerData;
+      : _initialPlayerData = initialPlayerData,
+        player = PlayerComponent(data: initialPlayerData) {
+    enemySpawnSystem = EnemySpawnSystem(game: this, random: random);
+    collisionSystem = CollisionSystem(game: this);
+    waveSystem = WaveSystem(
+      spawnSystem: enemySpawnSystem,
+      onWaveChanged: (wave) => onStateChanged?.call(),
+      onBossWave: (wave) => onBossWaveStarted?.call(wave),
+    );
+    experienceSystem = ExperienceSystem(
+      playerData: player.data,
+      onLevelUp: _handleLevelUp,
+    );
+    achievementSystem = AchievementSystem(
+      onUnlocked: (a) => onAchievementUnlocked?.call(a),
+    );
+    upgradeSystem = UpgradeSystem(random: random);
+  }
 
   final PlayerData? _initialPlayerData;
   final Random random = Random();
 
-  late final PlayerComponent player;
+  final PlayerComponent player;
   late final BulletPool bulletPool;
   late final PickupPool pickupPool;
   late final EnemySpawnSystem enemySpawnSystem;
@@ -83,7 +102,7 @@ class PixelDefenderGame extends FlameGame with KeyboardEvents {
 
     camera.viewfinder.anchor = Anchor.center;
 
-    player = PlayerComponent(data: _initialPlayerData)
+    player
       ..position = Vector2(GameConstants.worldWidth / 2, GameConstants.worldHeight / 2);
 
     bulletPool = BulletPool(world);
@@ -94,22 +113,6 @@ class PixelDefenderGame extends FlameGame with KeyboardEvents {
 
     bulletPool.preWarm(GameConstants.bulletPoolInitialSize);
 
-    enemySpawnSystem = EnemySpawnSystem(game: this, random: random);
-    waveSystem = WaveSystem(
-      spawnSystem: enemySpawnSystem,
-      onWaveChanged: (wave) => onStateChanged?.call(),
-      onBossWave: (wave) => onBossWaveStarted?.call(wave),
-    );
-    collisionSystem = CollisionSystem(game: this);
-    experienceSystem = ExperienceSystem(
-      playerData: player.data,
-      onLevelUp: _handleLevelUp,
-    );
-    achievementSystem = AchievementSystem(
-      onUnlocked: (a) => onAchievementUnlocked?.call(a),
-    );
-    upgradeSystem = UpgradeSystem(random: random);
-
     damageFlash = DamageFlashEffect(size: size);
     camera.viewport.add(damageFlash);
 
@@ -119,8 +122,16 @@ class PixelDefenderGame extends FlameGame with KeyboardEvents {
   // -----------------------------------------------------------------
   // Bucle principal
   // -----------------------------------------------------------------
+  int _frameCount = 0;
+
   @override
   void update(double dt) {
+    _frameCount++;
+    if (_frameCount % 60 == 0) {
+      // ignore: avoid_print
+      print('[PD_TICK] frame=$_frameCount runState=$runState active=${enemySpawnSystem.activeCount}');
+    }
+
     if (runState != GameRunState.running) {
       super.update(dt);
       return;
