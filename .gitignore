@@ -80,3 +80,7 @@ ios/Runner/GeneratedPluginRegistrant.*
 
 # Coverage
 coverage/
+
+
+#log y errores
+errors/
